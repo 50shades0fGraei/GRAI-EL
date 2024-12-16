@@ -59,7 +59,47 @@ X_train, X_test, y_train, y_test = train_test_split(df['text'], df['label'], tes
 vectorizer = TfidfVectorizer()
 X_train_tfidf = vectorizer.fit_transform(X_train)
 X_test_tfidf = vectorizer.transform(X_test)
+Here is the revised code with the training models included:
 
+
+#(previous code remains the same)
+
+# Train a Multinomial Naive Bayes classifier on the training data
+nb_model = MultinomialNB()
+nb_model.fit(X_train_tfidf, y_train)
+
+# Train a Support Vector Machine classifier on the training data
+svm_model = SVC()
+svm_model.fit(X_train_tfidf, y_train)
+
+# Train a Random Forest classifier on the training data
+rf_model = RandomForestClassifier()
+rf_model.fit(X_train_tfidf, y_train)
+
+# Train a Convolutional Neural Network (CNN) model on the training data
+cnn_model = Sequential()
+cnn_model.add(Embedding(5000, 100, input_length=200))
+cnn_model.add(Conv1D(64, kernel_size=3, activation='relu'))
+cnn_model.add(MaxPooling1D(pool_size=2))
+cnn_model.add(Flatten())
+cnn_model.add(Dense(64, activation='relu'))
+cnn_model.add(Dense(1, activation='sigmoid'))
+cnn_model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+cnn_model.fit(padded_sequences, df['label'], epochs=10, batch_size=32)
+
+# Train a Long Short-Term Memory (LSTM) model on the training data
+lstm_model = Sequential()
+lstm_model.add(Embedding(5000, 100, input_length=200))
+lstm_model.add(LSTM(64, dropout=0.2))
+lstm_model.add(Dense(64, activation='relu'))
+lstm_model.add(Dense(1, activation='sigmoid'))
+lstm_model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+lstm_model.fit(padded_sequences, df['label'], epochs=10, batch_size=32)
+
+#(previous code remains the same)
+
+
+This revised code includes the training of the CNN and LSTM models using the `padded_sequences` and `df['label']` data.
 # Train a Multinomial Naive Bayes classifier on the training data
 nb_model = MultinomialNB()
 nb_model.fit(X_train_tfidf, y_train)
