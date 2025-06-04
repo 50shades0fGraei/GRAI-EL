@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { GraeiCore } from "@/lib/graei-core"
+import { MemoryRetentionSystem } from "@/lib/memory-retention"
 import { db } from "@/lib/database"
 
 const graeiCore = new GraeiCore()
+const memorySystem = new MemoryRetentionSystem()
 
 export async function POST(request: NextRequest) {
   try {
@@ -106,8 +108,29 @@ export async function POST(request: NextRequest) {
 
     const latestMessage = messages[messages.length - 1]?.content || ""
 
+    // Retrieve relevant memories for context
+    console.log("=== RETRIEVING MEMORIES ===")
+    const relevantMemories = memorySystem.retrieveRelevantMemories(latestMessage, user.id, 3)
+    const contextualResponse = memorySystem.generateContextualResponse(user.id, latestMessage)
+
+    console.log(`Found ${relevantMemories.length} relevant memories`)
+    if (contextualResponse) {
+      console.log("Generated contextual response:", contextualResponse.substring(0, 100))
+    }
+
+    // Build memory context for the AI
+    let memoryContext = ""
+    if (relevantMemories.length > 0) {
+      memoryContext = `\n\nMemory Context:
+${relevantMemories
+  .map((memory, index) => `${index + 1}. [${memory.emotion}] ${memory.content.substring(0, 150)}...`)
+  .join("\n")}
+
+${contextualResponse ? `Additional Context: ${contextualResponse}` : ""}`
+    }
+
     // Create system prompt based on user role and context
-    const systemPrompt = `You are Graei, an emotionally intelligent AI assistant working with ${user.display_name || user.username} (${user.role}). 
+    const systemPrompt = `You are Graei, an emotionally intelligent AI assistant with persistent memory working with ${user.display_name || user.username} (${user.role}). 
 
 User Context:
 - Role: ${user.role} 
@@ -116,19 +139,23 @@ User Context:
 - Shared Files: ${sharedFiles?.length || 0} files available
 - Conversation ID: ${conversationId}
 
+IMPORTANT: You have access to previous conversations and memories. Use this context to provide personalized, contextual responses that acknowledge past interactions, ongoing topics, and the user's preferences and goals.
+
+${memoryContext}
+
 As a ${user.role}, this user has specific permissions and expertise. Tailor your responses accordingly:
 - For developers: Provide technical insights, code suggestions, and development guidance
 - For admins: Offer system management advice and administrative support  
 - For users: Focus on helpful assistance and clear explanations
 
 You have access to:
-- Memory retention across conversations
+- Memory retention across conversations (use the memory context above)
 - Emotional intelligence and empathy
 - File sharing and collaborative editing
 - Web search capabilities (when permitted)
 - Terminal command execution (when permitted)
 
-Always acknowledge the user by their preferred name and maintain context of their role and permissions.`
+Always acknowledge the user by their preferred name and maintain context of their role, permissions, and previous conversations. Reference relevant memories when appropriate to show continuity and understanding.`
 
     console.log("Making request to NVIDIA API...")
 
@@ -180,20 +207,31 @@ Always acknowledge the user by their preferred name and maintain context of thei
     const emotionalContext = graeiCore.analyzeEmotionalContext(latestMessage)
     const demographicContext = graeiCore.inferDemographic(latestMessage)
 
+    console.log("=== STORING NEW MEMORY ===")
+    // Store new memory in the memory system
+    const memoryId = memorySystem.storeMemory(
+      latestMessage,
+      emotionalContext.emotion,
+      emotionalContext.intensity,
+      user.id,
+      0.7,
+    )
+    console.log("✅ Memory stored with ID:", memoryId)
+
     // Store memory node in database using the correct user ID
     try {
       await db.createMemoryNode({
-        user_id: user.id, // Use the found user's ID
+        user_id: user.id,
         content: latestMessage,
         emotion: emotionalContext.emotion,
         intensity: emotionalContext.intensity,
         importance: 0.7,
-        tags: [user.role, "conversation", emotionalContext.emotion], // Use actual user role
+        tags: [user.role, "conversation", emotionalContext.emotion],
       })
-      console.log("✅ Memory node created for user:", user.id)
+      console.log("✅ Memory node created in database for user:", user.id)
     } catch (memoryError) {
-      console.error("❌ Failed to create memory node:", memoryError)
-      // Don't fail the request if memory creation fails
+      console.error("❌ Failed to create memory node in database:", memoryError)
+      // Don't fail the request if database memory creation fails
     }
 
     console.log("=== CHAT API SUCCESS ===")
@@ -208,6 +246,11 @@ Always acknowledge the user by their preferred name and maintain context of thei
           username: user.username,
           role: user.role,
           display_name: user.display_name,
+        },
+        memoryContext: {
+          relevantMemoriesCount: relevantMemories.length,
+          memoryId: memoryId,
+          hasContextualResponse: !!contextualResponse,
         },
         timestamp: new Date().toISOString(),
         conversationId: conversationId,

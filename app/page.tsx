@@ -7,13 +7,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, Send, Bot, User, AlertCircle, Brain, Monitor, LogOut, Settings } from "lucide-react"
+import {
+  Loader2,
+  Send,
+  Bot,
+  User,
+  AlertCircle,
+  Brain,
+  Monitor,
+  LogOut,
+  Settings,
+  Trash2,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { FileShare } from "@/components/file-share"
 import { ConversationInsights } from "@/components/conversation-insights"
-import { SharedTerminal } from "@/components/shared-terminal"
-import { AITerminalInterface } from "@/components/ai-terminal-interface"
+import { IntegratedWorkspace } from "@/components/integrated-workspace"
 import { UserProfile } from "@/components/user-profile"
 import { UserProvider, useUser } from "@/components/user-context"
 import { MemoryRetentionSystem } from "@/lib/memory-retention"
@@ -25,6 +37,8 @@ interface Message {
   content: string
   emotion?: string
   intensity?: number
+  hasSearchAction?: boolean
+  searchQuery?: string
 }
 
 interface SharedFile {
@@ -51,6 +65,7 @@ function GraeiAIContent() {
   const [sharedFiles, setSharedFiles] = useState<SharedFile[]>([])
   const [currentConversation, setCurrentConversation] = useState<any>(null)
   const [conversationInterval, setConversationInterval] = useState<NodeJS.Timeout | null>(null)
+  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false)
 
   // Add this useEffect to handle client-side mounting
   useEffect(() => {
@@ -98,7 +113,7 @@ function GraeiAIContent() {
       // Create or get current conversation
       const conversation = await db.createConversation(user.id, "Graei AI Session", {
         session_type: "collaborative",
-        features: ["memory", "emotions", "files", "terminal"],
+        features: ["memory", "emotions", "files", "browser", "editor"],
       })
       console.log("Conversation created:", conversation.id)
       setCurrentConversation(conversation)
@@ -128,6 +143,17 @@ function GraeiAIContent() {
     setReminders(memorySystem.generateReminders(user.id))
   }
 
+  const clearMemories = () => {
+    if (!user) return
+
+    if (confirm("Are you sure you want to clear all memories? This action cannot be undone.")) {
+      memorySystem.clearUserMemories(user.id)
+      updateInsights()
+      setMessages([])
+      console.log("All memories cleared for user:", user.id)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoadingMessage || !user) {
@@ -143,10 +169,16 @@ function GraeiAIContent() {
     console.log("User:", user.id, user.username, user.role)
     console.log("Conversation:", currentConversation?.id)
 
+    // Check if message contains search intent
+    const searchKeywords = ["search", "find", "look up", "research", "google", "browse"]
+    const hasSearchIntent = searchKeywords.some((keyword) => input.toLowerCase().includes(keyword))
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content: input,
+      hasSearchAction: hasSearchIntent,
+      searchQuery: hasSearchIntent ? input : undefined,
     }
 
     setMessages((prev) => [...prev, userMessage])
@@ -179,7 +211,7 @@ function GraeiAIContent() {
             role: m.role,
             content: m.content,
           })),
-          userId: user.id, // Make sure we're sending the correct user ID
+          userId: user.id,
           conversationId: currentConversation?.id,
           userRole: user.role,
           sharedFiles: sharedFiles,
@@ -227,14 +259,8 @@ function GraeiAIContent() {
         console.log("✅ Assistant message saved to database")
       }
 
-      // Store in memory system
-      memorySystem.storeMemory(
-        userMessage.content,
-        data.metadata?.emotionalContext?.emotion || "neutral",
-        data.metadata?.emotionalContext?.intensity || 0.5,
-        user.id,
-        0.7,
-      )
+      // Update insights after new message
+      setTimeout(updateInsights, 1000)
 
       console.log("=== MESSAGE PROCESSING COMPLETE ===")
     } catch (error) {
@@ -253,57 +279,18 @@ function GraeiAIContent() {
     }
   }
 
-  const handleAICommand = async (command: string) => {
-    if (!user || !hasPermission("execute_code")) {
-      console.warn("User lacks permission to execute AI commands")
-      return
+  const handleContentShare = (content: string, source: string, type: "browser" | "file") => {
+    // Share content with the conversation
+    const icon = type === "browser" ? "🌐" : "📄"
+    const shareMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: `${icon} **Shared ${type === "browser" ? "from" : "file"}:** ${source}\n\n${content.substring(0, 500)}${content.length > 500 ? "..." : ""}`,
     }
-
-    const aiCommandMessage = `[AI Terminal Command] ${command}`
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        role: "user",
-        content: aiCommandMessage,
-      },
-    ])
-
-    try {
-      const response = await fetch("/api/ai-command", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          command,
-          userId: user.id,
-          userRole: user.role,
-          context: {
-            currentEmotion,
-            hardwareState: memorySystem.getCurrentHardwareState(),
-            sharedFiles,
-          },
-        }),
-      })
-
-      const data = await response.json()
-      if (data.response) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: (Date.now() + 1).toString(),
-            role: "assistant",
-            content: `[AI Terminal Response] ${data.response}`,
-          },
-        ])
-      }
-    } catch (error) {
-      console.error("AI command error:", error)
-    }
+    setMessages((prev) => [...prev, shareMessage])
   }
 
-  const handleFileShare = async (file: SharedFile) => {
+  const handleFileShare = async (file: any) => {
     if (!user || !currentConversation) return
 
     try {
@@ -315,7 +302,7 @@ function GraeiAIContent() {
         content: file.content,
         file_type: file.type,
         size_bytes: file.content?.length || 0,
-        shared_by: file.sharedBy,
+        shared_by: file.sharedBy || file.lastModifiedBy === "ai" ? "ai" : "human",
       })
 
       setSharedFiles((prev) => {
@@ -326,56 +313,40 @@ function GraeiAIContent() {
         return [...prev, file]
       })
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: "user",
-          content: `[File Shared] ${file.name} (${file.type}) - ${file.content?.substring(0, 100)}...`,
-        },
-      ])
+      // Don't automatically add to chat - let the workspace handle it
     } catch (error) {
       console.error("File share error:", error)
     }
   }
 
-  const handleAITerminalAction = async (action: string, parameters: Record<string, any>): Promise<string> => {
-    if (!user) return "User not authenticated"
-
-    // Log AI action to database
-    try {
-      const aiAction = await db.createAIAction({
-        user_id: user.id,
-        action_type: action,
-        parameters,
-        status: "executing",
-      })
-
-      // Simulate action execution
-      await new Promise((resolve) => setTimeout(resolve, 1000 + Math.random() * 2000))
-
-      const responses: Record<string, string> = {
-        memory_scan: `Scanned ${Math.floor(Math.random() * 100)} memory nodes for user ${user.username}. Found ${Math.floor(Math.random() * 10)} relevant patterns.`,
-        emotional_calibration: `Emotional systems calibrated for ${user.display_name || user.username}. Current state: ${currentEmotion} (${(Math.random() * 100).toFixed(1)}% intensity)`,
-        hardware_optimization: `Hardware optimized for user role: ${user.role}. CPU: ${(Math.random() * 100).toFixed(1)}%, Memory: ${(Math.random() * 100).toFixed(1)}%`,
-        context_analysis: `Analyzed conversation context for ${user.username}. Identified ${Math.floor(Math.random() * 5)} key themes and ${Math.floor(Math.random() * 3)} emotional transitions.`,
-        predictive_modeling: `Generated predictive models for ${user.display_name || user.username} with ${(Math.random() * 100).toFixed(1)}% confidence.`,
-      }
-
-      const result = responses[action] || `Action "${action}" executed successfully for user ${user.username}.`
-
-      // Update AI action status
-      await db.updateAIAction(aiAction.id, {
-        status: "completed",
-        result,
-        execution_time_ms: Math.floor(1000 + Math.random() * 2000),
-      })
-
-      return result
-    } catch (error) {
-      console.error("AI terminal action error:", error)
-      return `Error executing action: ${error instanceof Error ? error.message : "Unknown error"}`
+  const handleAIAssist = async (file: any, request: string) => {
+    // Handle AI assistance request for files
+    const assistMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: `🤖 **AI Assist Request for ${file.name}:** ${request}`,
     }
+    setMessages((prev) => [...prev, assistMessage])
+
+    // Simulate AI response
+    setTimeout(() => {
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: `I can help you with ${file.name}! Based on your request "${request}", here are my suggestions:\n\n• Review the code structure for improvements\n• Consider adding error handling\n• Add documentation for better maintainability\n• Test the functionality thoroughly\n\nWould you like me to help implement any of these suggestions?`,
+      }
+      setMessages((prev) => [...prev, aiResponse])
+    }, 1500)
+  }
+
+  const handleSearchRequest = (query: string) => {
+    // Add a message indicating search is happening
+    const searchMessage: Message = {
+      id: Date.now().toString(),
+      role: "assistant",
+      content: `🔍 Searching for "${query}" in the browser workspace...`,
+    }
+    setMessages((prev) => [...prev, searchMessage])
   }
 
   if (isLoading) {
@@ -410,7 +381,7 @@ function GraeiAIContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-4">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-full mx-auto">
         {/* Header with user info */}
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -424,13 +395,16 @@ function GraeiAIContent() {
                   {user.role.replace("_", " ").toUpperCase()}
                 </Badge>
                 <span className="text-sm text-gray-600">
-                  User ID: {user.id} • Last login:{" "}
-                  {user.last_login ? new Date(user.last_login).toLocaleDateString() : "First time"}
+                  Memories: {insights?.memoryStats?.totalMemories || 0} • Files: {sharedFiles.length}
                 </span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={clearMemories}>
+              <Trash2 className="h-4 w-4 mr-1" />
+              Clear Memory
+            </Button>
             <Button variant="outline" size="sm">
               <Settings className="h-4 w-4 mr-1" />
               Settings
@@ -443,136 +417,171 @@ function GraeiAIContent() {
         </div>
 
         <Tabs defaultValue="workspace" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="workspace">Workspace</TabsTrigger>
-            <TabsTrigger value="chat">Chat</TabsTrigger>
             <TabsTrigger value="insights">Insights</TabsTrigger>
             <TabsTrigger value="profile">Profile</TabsTrigger>
-            <TabsTrigger value="development">Development</TabsTrigger>
             <TabsTrigger value="memory">Memory</TabsTrigger>
           </TabsList>
 
           <TabsContent value="workspace" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[85vh]">
-              {/* Left Side - Chat Interface */}
-              <Card className="flex flex-col">
-                <CardHeader className="border-b">
-                  <CardTitle className="flex items-center gap-2">
-                    <Bot className="h-6 w-6 text-purple-600" />
-                    Graei AI Chat
-                    <span className="text-sm font-normal text-gray-500 ml-2">Collaborative Mode • {user.role}</span>
-                  </CardTitle>
-                  {error && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
-                </CardHeader>
-
-                <CardContent className="flex-1 flex flex-col p-0">
-                  <ScrollArea className="flex-1 p-4">
-                    {messages.length === 0 ? (
-                      <div className="flex items-center justify-center h-full text-gray-500">
-                        <div className="text-center">
-                          <Monitor className="h-12 w-12 mx-auto mb-4 text-purple-400" />
-                          <p className="text-lg font-medium">Collaborative Workspace</p>
-                          <p className="text-sm">
-                            Hello {user.display_name || user.username}! Ready to collaborate with AI?
-                          </p>
-                          <p className="text-xs text-gray-400 mt-2">User ID: {user.id}</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {messages.map((message) => (
-                          <div
-                            key={message.id}
-                            className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                          >
-                            <div
-                              className={`flex gap-3 max-w-[80%] ${
-                                message.role === "user" ? "flex-row-reverse" : "flex-row"
-                              }`}
-                            >
-                              <div
-                                className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                  message.role === "user" ? "bg-blue-500 text-white" : "bg-purple-500 text-white"
-                                }`}
-                              >
-                                {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                              </div>
-                              <div
-                                className={`rounded-lg p-3 ${
-                                  message.role === "user" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-900"
-                                }`}
-                              >
-                                <p className="whitespace-pre-wrap">{message.content}</p>
-                                {message.emotion && (
-                                  <div className="text-xs mt-1 opacity-70">
-                                    Emotion: {message.emotion} (Intensity: {message.intensity?.toFixed(1)})
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                        {isLoadingMessage && (
-                          <div className="flex gap-3 justify-start">
-                            <div className="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center">
-                              <Bot className="h-4 w-4" />
-                            </div>
-                            <div className="bg-gray-100 rounded-lg p-3">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            </div>
-                          </div>
+            <div className="h-[85vh] flex gap-4">
+              {/* Chat Interface - Flexible width */}
+              <div className={`transition-all duration-300 ${workspaceCollapsed ? "flex-1" : "flex-[2]"}`}>
+                <Card className="h-full flex flex-col">
+                  <CardHeader className="border-b">
+                    <CardTitle className="flex items-center gap-2">
+                      <Bot className="h-6 w-6 text-purple-600" />
+                      Graei AI Chat
+                      <span className="text-sm font-normal text-gray-500 ml-2">
+                        Collaborative Workspace • {insights?.memoryStats?.totalMemories || 0} memories
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ml-auto"
+                        onClick={() => setWorkspaceCollapsed(!workspaceCollapsed)}
+                      >
+                        {workspaceCollapsed ? (
+                          <ChevronLeft className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
                         )}
+                      </Button>
+                    </CardTitle>
+                    {error && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{error}</AlertDescription>
+                      </Alert>
+                    )}
+                    {predictiveQuestions.length > 0 && (
+                      <div className="text-sm text-purple-600">
+                        <strong>Suggested:</strong> {predictiveQuestions[0]}
                       </div>
                     )}
-                  </ScrollArea>
+                  </CardHeader>
 
-                  <div className="border-t p-4">
-                    <form onSubmit={handleSubmit} className="flex gap-2">
-                      <Textarea
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder={`Type your message, ${user.display_name || user.username}...`}
-                        className="flex-1 min-h-[60px] resize-none"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault()
-                            handleSubmit(e)
-                          }
-                        }}
-                      />
-                      <Button type="submit" disabled={!input.trim() || isLoadingMessage} className="self-end">
-                        {isLoadingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      </Button>
-                    </form>
-                  </div>
-                </CardContent>
-              </Card>
+                  <CardContent className="flex-1 flex flex-col p-0">
+                    <ScrollArea className="flex-1 p-4">
+                      {messages.length === 0 ? (
+                        <div className="flex items-center justify-center h-full text-gray-500">
+                          <div className="text-center">
+                            <Monitor className="h-12 w-12 mx-auto mb-4 text-purple-400" />
+                            <p className="text-lg font-medium">Collaborative AI Workspace</p>
+                            <p className="text-sm">
+                              Hello {user.display_name || user.username}! I can help you with conversations, and you can
+                              use the workspace tools on the right for browsing and file editing.
+                            </p>
+                            {insights?.memoryStats?.totalMemories > 0 && (
+                              <p className="text-xs text-gray-400 mt-2">
+                                I have {insights.memoryStats.totalMemories} memories about you
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {messages.map((message) => (
+                            <div
+                              key={message.id}
+                              className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                            >
+                              <div
+                                className={`flex gap-3 max-w-[85%] ${
+                                  message.role === "user" ? "flex-row-reverse" : "flex-row"
+                                }`}
+                              >
+                                <div
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                    message.role === "user" ? "bg-blue-500 text-white" : "bg-purple-500 text-white"
+                                  }`}
+                                >
+                                  {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                                </div>
+                                <div
+                                  className={`rounded-lg p-3 break-words ${
+                                    message.role === "user" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-900"
+                                  }`}
+                                >
+                                  <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                                  {message.emotion && (
+                                    <div className="text-xs mt-1 opacity-70">
+                                      Emotion: {message.emotion} (Intensity: {message.intensity?.toFixed(1)})
+                                    </div>
+                                  )}
+                                  {message.hasSearchAction && (
+                                    <div className="mt-2 pt-2 border-t border-gray-200">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          // This would trigger search in workspace
+                                          console.log("Search action:", message.searchQuery)
+                                        }}
+                                      >
+                                        <Search className="h-4 w-4 mr-1" />
+                                        Search in Browser
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {isLoadingMessage && (
+                            <div className="flex gap-3 justify-start">
+                              <div className="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center">
+                                <Bot className="h-4 w-4" />
+                              </div>
+                              <div className="bg-gray-100 rounded-lg p-3">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </ScrollArea>
 
-              {/* Right Side - Shared Terminal and AI Interface */}
-              <div className="space-y-4">
-                <div className="h-[60%]">
-                  <SharedTerminal onAICommand={handleAICommand} onFileShare={handleFileShare} />
-                </div>
-                <div className="h-[35%]">
-                  <AITerminalInterface
-                    onExecuteAction={handleAITerminalAction}
-                    hardwareState={memorySystem.getCurrentHardwareState()}
-                    currentEmotion={currentEmotion}
+                    <div className="border-t p-4">
+                      <form onSubmit={handleSubmit} className="flex gap-2">
+                        <Textarea
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          placeholder={`Chat with me, ${user.display_name || user.username}! Use the workspace tools ${workspaceCollapsed ? "(click arrow to expand)" : "on the right"} for browsing and file editing.`}
+                          className="flex-1 min-h-[60px] resize-none"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault()
+                              handleSubmit(e)
+                            }
+                          }}
+                        />
+                        <Button type="submit" disabled={!input.trim() || isLoadingMessage} className="self-end">
+                          {isLoadingMessage ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </form>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Integrated Workspace - Collapsible */}
+              {!workspaceCollapsed && (
+                <div className="flex-1 min-w-[400px]">
+                  <IntegratedWorkspace
+                    onFileShare={handleFileShare}
+                    onContentShare={handleContentShare}
+                    onAIAssist={handleAIAssist}
+                    onSearchRequest={handleSearchRequest}
+                    sharedFiles={sharedFiles}
                   />
                 </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="chat">
-            {/* Simplified chat view */}
-            <div className="text-center text-gray-500 py-8">
-              <p>Use the Workspace tab for the full collaborative experience</p>
+              )}
             </div>
           </TabsContent>
 
@@ -586,22 +595,16 @@ function GraeiAIContent() {
             <UserProfile />
           </TabsContent>
 
-          <TabsContent value="development">
-            {hasPermission("edit_system") ? (
-              <FileShare onProfileImport={() => {}} onProfileExport={() => ""} onFrameworkUpdate={() => {}} />
-            ) : (
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <p className="text-gray-500">You don't have permission to access development tools.</p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
           <TabsContent value="memory">
             <Card>
               <CardHeader>
-                <CardTitle>Memory System Status</CardTitle>
+                <CardTitle className="flex items-center justify-between">
+                  Memory System Status
+                  <Button variant="outline" size="sm" onClick={clearMemories}>
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Clear All
+                  </Button>
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -610,6 +613,15 @@ function GraeiAIContent() {
                   </div>
                   <div className="text-sm">
                     <strong>User ID:</strong> {user.id}
+                  </div>
+                  <div className="text-sm">
+                    <strong>Total Memories:</strong> {insights?.memoryStats?.totalMemories || 0}
+                  </div>
+                  <div className="text-sm">
+                    <strong>Recent Memories (7 days):</strong> {insights?.memoryStats?.recentMemories || 0}
+                  </div>
+                  <div className="text-sm">
+                    <strong>Active Topics:</strong> {insights?.memoryStats?.topTopics?.length || 0}
                   </div>
                   <div className="text-sm">
                     <strong>Total Messages:</strong> {messages.length}
@@ -623,6 +635,17 @@ function GraeiAIContent() {
                   <div className="text-sm">
                     <strong>Conversation ID:</strong> {currentConversation?.id || "Not initialized"}
                   </div>
+
+                  {reminders.length > 0 && (
+                    <div className="mt-4">
+                      <strong className="text-sm">Reminders:</strong>
+                      <ul className="text-sm text-gray-600 mt-1">
+                        {reminders.map((reminder, index) => (
+                          <li key={index}>• {reminder}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

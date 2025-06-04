@@ -1,4 +1,4 @@
-// Memory Retention Framework with Hardware Optimization
+// Enhanced Memory Retention Framework with Persistent Storage
 export interface MemoryNode {
   id: string
   content: string
@@ -8,6 +8,10 @@ export interface MemoryNode {
   connections: string[]
   importance: number
   hardwareState: HardwareState
+  userId: string
+  tags: string[]
+  accessCount: number
+  lastAccessed: Date
 }
 
 export interface HardwareState {
@@ -24,6 +28,7 @@ export interface ConversationProfile {
     frequency: number
     triggers: string[]
     responses: string[]
+    lastSeen: Date
   }>
   personalContext: {
     goals: string[]
@@ -34,6 +39,13 @@ export interface ConversationProfile {
       event: string
       date: string
       importance: number
+      mentioned: Date
+    }>
+    topics: Array<{
+      topic: string
+      frequency: number
+      sentiment: string
+      lastDiscussed: Date
     }>
   }
   disconnectionPoints: Array<{
@@ -50,6 +62,13 @@ export interface ConversationProfile {
       effectiveness: number
     }>
   }
+  conversationHistory: Array<{
+    messageId: string
+    content: string
+    emotion: string
+    timestamp: Date
+    importance: number
+  }>
 }
 
 export class MemoryRetentionSystem {
@@ -64,6 +83,7 @@ export class MemoryRetentionSystem {
 
   constructor() {
     this.initializeSystem()
+    this.loadFromStorage()
   }
 
   private initializeSystem() {
@@ -76,43 +96,149 @@ export class MemoryRetentionSystem {
     }
   }
 
+  private loadFromStorage() {
+    if (typeof window === "undefined") return
+
+    try {
+      // Load memories from localStorage
+      const storedMemories = localStorage.getItem("graei_memories")
+      if (storedMemories) {
+        const memoriesData = JSON.parse(storedMemories)
+        Object.entries(memoriesData).forEach(([id, memory]: [string, any]) => {
+          this.memories.set(id, {
+            ...memory,
+            timestamp: new Date(memory.timestamp),
+            lastAccessed: new Date(memory.lastAccessed),
+          })
+        })
+        console.log(`Loaded ${this.memories.size} memories from storage`)
+      }
+
+      // Load profiles from localStorage
+      const storedProfiles = localStorage.getItem("graei_profiles")
+      if (storedProfiles) {
+        const profilesData = JSON.parse(storedProfiles)
+        Object.entries(profilesData).forEach(([userId, profile]: [string, any]) => {
+          this.profiles.set(userId, {
+            ...profile,
+            emotionalPatterns:
+              profile.emotionalPatterns?.map((p: any) => ({
+                ...p,
+                lastSeen: new Date(p.lastSeen),
+              })) || [],
+            personalContext: {
+              ...profile.personalContext,
+              futureEvents:
+                profile.personalContext?.futureEvents?.map((e: any) => ({
+                  ...e,
+                  mentioned: new Date(e.mentioned),
+                })) || [],
+              topics:
+                profile.personalContext?.topics?.map((t: any) => ({
+                  ...t,
+                  lastDiscussed: new Date(t.lastDiscussed),
+                })) || [],
+            },
+            conversationHistory:
+              profile.conversationHistory?.map((h: any) => ({
+                ...h,
+                timestamp: new Date(h.timestamp),
+              })) || [],
+          })
+        })
+        console.log(`Loaded ${this.profiles.size} user profiles from storage`)
+      }
+    } catch (error) {
+      console.error("Failed to load memory data from storage:", error)
+    }
+  }
+
+  private saveToStorage() {
+    if (typeof window === "undefined") return
+
+    try {
+      // Save memories to localStorage
+      const memoriesData: Record<string, any> = {}
+      this.memories.forEach((memory, id) => {
+        memoriesData[id] = {
+          ...memory,
+          timestamp: memory.timestamp.toISOString(),
+          lastAccessed: memory.lastAccessed.toISOString(),
+        }
+      })
+      localStorage.setItem("graei_memories", JSON.stringify(memoriesData))
+
+      // Save profiles to localStorage
+      const profilesData: Record<string, any> = {}
+      this.profiles.forEach((profile, userId) => {
+        profilesData[userId] = {
+          ...profile,
+          emotionalPatterns: profile.emotionalPatterns.map((p) => ({
+            ...p,
+            lastSeen: p.lastSeen.toISOString(),
+          })),
+          personalContext: {
+            ...profile.personalContext,
+            futureEvents: profile.personalContext.futureEvents.map((e) => ({
+              ...e,
+              mentioned: e.mentioned.toISOString(),
+            })),
+            topics: profile.personalContext.topics.map((t) => ({
+              ...t,
+              lastDiscussed: t.lastDiscussed.toISOString(),
+            })),
+          },
+          conversationHistory: profile.conversationHistory.map((h) => ({
+            ...h,
+            timestamp: h.timestamp.toISOString(),
+          })),
+        }
+      })
+      localStorage.setItem("graei_profiles", JSON.stringify(profilesData))
+
+      console.log("Memory data saved to storage")
+    } catch (error) {
+      console.error("Failed to save memory data to storage:", error)
+    }
+  }
+
   // Hardware Optimization Based on Emotions
   optimizeHardwareForEmotion(emotion: string, intensity: number): HardwareState {
     const optimizations: Record<string, (intensity: number) => HardwareState> = {
       happy: (intensity) => ({
-        cpuFrequency: 1.0 + intensity * 0.5, // Boost CPU for creativity
-        memoryUsage: 1.0 + intensity * 0.3, // Enhanced memory for interactions
-        processingSpeed: 1.0 + intensity * 0.4, // Faster processing
+        cpuFrequency: 1.0 + intensity * 0.5,
+        memoryUsage: 1.0 + intensity * 0.3,
+        processingSpeed: 1.0 + intensity * 0.4,
         emotionalLoad: intensity,
       }),
       sad: (intensity) => ({
-        cpuFrequency: 1.0 - intensity * 0.3, // Slower processing for reflection
-        memoryUsage: 1.0 + intensity * 0.2, // More memory for introspection
-        processingSpeed: 1.0 - intensity * 0.4, // Deliberate slowdown
+        cpuFrequency: 1.0 - intensity * 0.3,
+        memoryUsage: 1.0 + intensity * 0.2,
+        processingSpeed: 1.0 - intensity * 0.4,
         emotionalLoad: intensity,
       }),
       angry: (intensity) => ({
-        cpuFrequency: 1.0 + intensity * 0.6, // High energy processing
-        memoryUsage: 1.0 + intensity * 0.1, // Focused memory usage
-        processingSpeed: 1.0 + intensity * 0.3, // Quick but potentially rash
+        cpuFrequency: 1.0 + intensity * 0.6,
+        memoryUsage: 1.0 + intensity * 0.1,
+        processingSpeed: 1.0 + intensity * 0.3,
         emotionalLoad: intensity,
       }),
       fearful: (intensity) => ({
-        cpuFrequency: 1.0 + intensity * 0.7, // Heightened alertness
-        memoryUsage: 1.0, // Standard memory
-        processingSpeed: 1.0 + intensity * 0.5, // Quick threat assessment
+        cpuFrequency: 1.0 + intensity * 0.7,
+        memoryUsage: 1.0,
+        processingSpeed: 1.0 + intensity * 0.5,
         emotionalLoad: intensity,
       }),
       surprised: (intensity) => ({
-        cpuFrequency: 1.0 + intensity * 0.8, // Rapid assessment
-        memoryUsage: 1.0 + intensity * 0.4, // Enhanced focus
-        processingSpeed: 1.0 + intensity * 0.6, // Immediate processing
+        cpuFrequency: 1.0 + intensity * 0.8,
+        memoryUsage: 1.0 + intensity * 0.4,
+        processingSpeed: 1.0 + intensity * 0.6,
         emotionalLoad: intensity,
       }),
       disgusted: (intensity) => ({
-        cpuFrequency: 1.0 - intensity * 0.2, // Reduced engagement
-        memoryUsage: 1.0 - intensity * 0.1, // Limited resources
-        processingSpeed: 1.0 - intensity * 0.3, // Avoidance behavior
+        cpuFrequency: 1.0 - intensity * 0.2,
+        memoryUsage: 1.0 - intensity * 0.1,
+        processingSpeed: 1.0 - intensity * 0.3,
         emotionalLoad: intensity,
       }),
     }
@@ -123,7 +249,7 @@ export class MemoryRetentionSystem {
     return newState
   }
 
-  // Store memory with emotional and hardware context
+  // Store memory with enhanced context extraction
   storeMemory(content: string, emotion: string, intensity: number, userId: string, importance = 0.5): string {
     const memoryId = `memory_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const hardwareState = this.optimizeHardwareForEmotion(emotion, intensity)
@@ -137,14 +263,50 @@ export class MemoryRetentionSystem {
       connections: [],
       importance,
       hardwareState,
+      userId,
+      tags: this.extractTags(content, emotion),
+      accessCount: 0,
+      lastAccessed: new Date(),
     }
 
     this.memories.set(memoryId, memory)
     this.updateProfile(userId, memory)
+    this.saveToStorage()
+
+    console.log(`Stored memory for user ${userId}: ${content.substring(0, 50)}...`)
     return memoryId
   }
 
-  // Update user profile with new memory
+  private extractTags(content: string, emotion: string): string[] {
+    const tags = [emotion]
+
+    // Extract common topics and keywords
+    const topicKeywords = {
+      work: ["work", "job", "career", "office", "meeting", "project", "deadline", "boss", "colleague"],
+      family: ["family", "mom", "dad", "sister", "brother", "parent", "child", "kids", "spouse"],
+      health: ["health", "doctor", "medicine", "exercise", "diet", "sick", "pain", "therapy"],
+      technology: ["code", "programming", "computer", "software", "app", "website", "AI", "tech"],
+      education: ["school", "study", "learn", "class", "teacher", "student", "homework", "exam"],
+      hobbies: ["hobby", "music", "art", "sports", "game", "book", "movie", "travel"],
+      relationships: ["friend", "relationship", "dating", "love", "partner", "social"],
+    }
+
+    const contentLower = content.toLowerCase()
+    Object.entries(topicKeywords).forEach(([topic, keywords]) => {
+      if (keywords.some((keyword) => contentLower.includes(keyword))) {
+        tags.push(topic)
+      }
+    })
+
+    // Extract time-related tags
+    if (contentLower.includes("tomorrow") || contentLower.includes("next")) tags.push("future")
+    if (contentLower.includes("yesterday") || contentLower.includes("last")) tags.push("past")
+    if (contentLower.includes("today") || contentLower.includes("now")) tags.push("present")
+
+    return tags
+  }
+
+  // Enhanced profile updating with better context extraction
   private updateProfile(userId: string, memory: MemoryNode) {
     let profile = this.profiles.get(userId)
     if (!profile) {
@@ -155,21 +317,84 @@ export class MemoryRetentionSystem {
     const existingPattern = profile.emotionalPatterns.find((p) => p.emotion === memory.emotion)
     if (existingPattern) {
       existingPattern.frequency++
-      existingPattern.triggers.push(memory.content.substring(0, 50))
+      existingPattern.lastSeen = new Date()
+      if (!existingPattern.triggers.includes(memory.content.substring(0, 50))) {
+        existingPattern.triggers.push(memory.content.substring(0, 50))
+      }
     } else {
       profile.emotionalPatterns.push({
         emotion: memory.emotion,
         frequency: 1,
         triggers: [memory.content.substring(0, 50)],
         responses: [],
+        lastSeen: new Date(),
       })
     }
 
-    // Extract future events and goals
-    this.extractFutureEvents(memory.content, profile)
+    // Extract and update personal context
     this.extractPersonalContext(memory.content, profile)
+    this.extractTopics(memory.content, memory.emotion, profile)
+
+    // Add to conversation history
+    profile.conversationHistory.push({
+      messageId: memory.id,
+      content: memory.content,
+      emotion: memory.emotion,
+      timestamp: memory.timestamp,
+      importance: memory.importance,
+    })
+
+    // Keep only last 100 conversation entries
+    if (profile.conversationHistory.length > 100) {
+      profile.conversationHistory = profile.conversationHistory.slice(-100)
+    }
 
     this.profiles.set(userId, profile)
+  }
+
+  private extractTopics(content: string, emotion: string, profile: ConversationProfile) {
+    // Extract key topics from the conversation
+    const words = content.toLowerCase().split(/\s+/)
+    const significantWords = words.filter(
+      (word) =>
+        word.length > 3 &&
+        ![
+          "this",
+          "that",
+          "with",
+          "have",
+          "will",
+          "been",
+          "were",
+          "they",
+          "them",
+          "what",
+          "when",
+          "where",
+          "how",
+        ].includes(word),
+    )
+
+    significantWords.forEach((word) => {
+      const existingTopic = profile.personalContext.topics.find((t) => t.topic === word)
+      if (existingTopic) {
+        existingTopic.frequency++
+        existingTopic.lastDiscussed = new Date()
+        existingTopic.sentiment = emotion
+      } else if (significantWords.length <= 10) {
+        // Only add if not too many topics
+        profile.personalContext.topics.push({
+          topic: word,
+          frequency: 1,
+          sentiment: emotion,
+          lastDiscussed: new Date(),
+        })
+      }
+    })
+
+    // Keep only top 50 topics
+    profile.personalContext.topics.sort((a, b) => b.frequency - a.frequency)
+    profile.personalContext.topics = profile.personalContext.topics.slice(0, 50)
   }
 
   private createNewProfile(userId: string): ConversationProfile {
@@ -182,65 +407,117 @@ export class MemoryRetentionSystem {
         preferences: [],
         relationships: [],
         futureEvents: [],
+        topics: [],
       },
       disconnectionPoints: [],
       hardwareOptimization: {
         preferredStates: {},
         adaptationHistory: [],
       },
+      conversationHistory: [],
     }
   }
 
-  // Extract future events and tasks from conversation
-  private extractFutureEvents(content: string, profile: ConversationProfile) {
+  // Enhanced future events and personal context extraction
+  private extractPersonalContext(content: string, profile: ConversationProfile) {
     const futureIndicators = [
-      /later on I have to (.+)/gi,
-      /I need to (.+)/gi,
-      /I meant to (.+)/gi,
-      /tomorrow I will (.+)/gi,
-      /next week (.+)/gi,
-      /planning to (.+)/gi,
-      /going to (.+)/gi,
+      { pattern: /(?:later|tomorrow|next week|next month|planning to|going to|will|gonna)\s+(.+)/gi, type: "future" },
+      { pattern: /(?:I need to|I have to|I must|I should)\s+(.+)/gi, type: "task" },
+      { pattern: /(?:my goal is|I want to|hoping to|trying to)\s+(.+)/gi, type: "goal" },
+      { pattern: /(?:struggling with|difficult|problem with|challenge)\s+(.+)/gi, type: "challenge" },
+      { pattern: /(?:I like|I love|I prefer|I enjoy)\s+(.+)/gi, type: "preference" },
+      {
+        pattern:
+          /(?:my|with my)\s+(mom|dad|sister|brother|friend|partner|spouse|wife|husband|boss|colleague)\s*(.+)?/gi,
+        type: "relationship",
+      },
     ]
 
-    futureIndicators.forEach((regex) => {
-      const matches = content.match(regex)
-      if (matches) {
-        matches.forEach((match) => {
-          const event = match.replace(regex, "$1").trim()
-          profile.personalContext.futureEvents.push({
-            event,
-            date: "TBD",
-            importance: 0.7,
-          })
-        })
+    futureIndicators.forEach(({ pattern, type }) => {
+      let match
+      while ((match = pattern.exec(content)) !== null) {
+        const extracted = match[1]?.trim()
+        if (extracted && extracted.length > 2) {
+          switch (type) {
+            case "future":
+            case "task":
+              if (!profile.personalContext.futureEvents.some((e) => e.event === extracted)) {
+                profile.personalContext.futureEvents.push({
+                  event: extracted,
+                  date: "TBD",
+                  importance: 0.7,
+                  mentioned: new Date(),
+                })
+              }
+              break
+            case "goal":
+              if (!profile.personalContext.goals.includes(extracted)) {
+                profile.personalContext.goals.push(extracted)
+              }
+              break
+            case "challenge":
+              if (!profile.personalContext.challenges.includes(extracted)) {
+                profile.personalContext.challenges.push(extracted)
+              }
+              break
+            case "preference":
+              if (!profile.personalContext.preferences.includes(extracted)) {
+                profile.personalContext.preferences.push(extracted)
+              }
+              break
+            case "relationship":
+              const relationship = match[1] + (match[2] ? ` ${match[2]}` : "")
+              if (!profile.personalContext.relationships.includes(relationship)) {
+                profile.personalContext.relationships.push(relationship)
+              }
+              break
+          }
+        }
       }
     })
+
+    // Limit arrays to prevent memory bloat
+    profile.personalContext.goals = profile.personalContext.goals.slice(-20)
+    profile.personalContext.challenges = profile.personalContext.challenges.slice(-20)
+    profile.personalContext.preferences = profile.personalContext.preferences.slice(-30)
+    profile.personalContext.relationships = profile.personalContext.relationships.slice(-15)
+    profile.personalContext.futureEvents = profile.personalContext.futureEvents.slice(-25)
   }
 
-  // Extract personal context (goals, relationships, etc.)
-  private extractPersonalContext(content: string, profile: ConversationProfile) {
-    const contextPatterns = {
-      goals: [/my goal is (.+)/gi, /I want to (.+)/gi, /hoping to (.+)/gi],
-      challenges: [/struggling with (.+)/gi, /difficult (.+)/gi, /problem with (.+)/gi],
-      relationships: [/my (.+) said/gi, /with my (.+)/gi, /visit my (.+)/gi],
-      preferences: [/I like (.+)/gi, /I prefer (.+)/gi, /I enjoy (.+)/gi],
+  // Generate contextual responses based on memory
+  generateContextualResponse(userId: string, currentMessage: string): string {
+    const profile = this.profiles.get(userId)
+    if (!profile) return ""
+
+    const relevantMemories = this.retrieveRelevantMemories(currentMessage, userId, 5)
+    const recentEmotions = profile.emotionalPatterns
+      .filter((p) => p.lastSeen > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) // Last week
+      .sort((a, b) => b.frequency - a.frequency)
+
+    const contextualInfo = []
+
+    // Add memory context
+    if (relevantMemories.length > 0) {
+      contextualInfo.push(`I remember we discussed: ${relevantMemories[0].content.substring(0, 100)}...`)
     }
 
-    Object.entries(contextPatterns).forEach(([category, patterns]) => {
-      patterns.forEach((regex) => {
-        const matches = content.match(regex)
-        if (matches) {
-          matches.forEach((match) => {
-            const extracted = match.replace(regex, "$1").trim()
-            const categoryArray = profile.personalContext[category as keyof typeof profile.personalContext]
-            if (Array.isArray(categoryArray) && !categoryArray.includes(extracted)) {
-              categoryArray.push(extracted)
-            }
-          })
-        }
-      })
-    })
+    // Add emotional context
+    if (recentEmotions.length > 0) {
+      contextualInfo.push(`I notice you've been feeling ${recentEmotions[0].emotion} lately.`)
+    }
+
+    // Add personal context
+    if (profile.personalContext.goals.length > 0) {
+      contextualInfo.push(`Considering your goal to ${profile.personalContext.goals[0]}.`)
+    }
+
+    // Add future events
+    if (profile.personalContext.futureEvents.length > 0) {
+      const upcomingEvent = profile.personalContext.futureEvents[0]
+      contextualInfo.push(`I remember you mentioned ${upcomingEvent.event}.`)
+    }
+
+    return contextualInfo.length > 0 ? contextualInfo.join(" ") : ""
   }
 
   // Generate predictive questions based on profile
@@ -268,7 +545,16 @@ export class MemoryRetentionSystem {
       questions.push(`Have you found any solutions for ${challenge}?`)
     })
 
-    return questions.slice(0, 3) // Return top 3 questions
+    // Questions about recent topics
+    const recentTopics = profile.personalContext.topics
+      .filter((t) => t.lastDiscussed > new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)) // Last 3 days
+      .slice(0, 3)
+
+    recentTopics.forEach((topic) => {
+      questions.push(`How are things going with ${topic.topic}?`)
+    })
+
+    return questions.slice(0, 5) // Return top 5 questions
   }
 
   // Generate reminders based on stored information
@@ -278,24 +564,53 @@ export class MemoryRetentionSystem {
 
     const reminders: string[] = []
 
+    // Reminders about future events
     profile.personalContext.futureEvents.forEach((event) => {
       reminders.push(`Remember: ${event.event}`)
     })
 
-    return reminders
-  }
-
-  // Track disconnection points for better assistance
-  trackDisconnection(userId: string, topic: string, context: string) {
-    const profile = this.profiles.get(userId) || this.createNewProfile(userId)
-
-    profile.disconnectionPoints.push({
-      topic,
-      context,
-      timestamp: new Date(),
+    // Reminders about goals
+    profile.personalContext.goals.forEach((goal) => {
+      reminders.push(`Goal: ${goal}`)
     })
 
-    this.profiles.set(userId, profile)
+    return reminders.slice(0, 3)
+  }
+
+  // Retrieve relevant memories for context
+  retrieveRelevantMemories(query: string, userId: string, limit = 5): MemoryNode[] {
+    const userMemories = Array.from(this.memories.values()).filter((memory) => memory.userId === userId)
+
+    if (userMemories.length === 0) return []
+
+    // Simple relevance scoring based on content similarity and recency
+    const scoredMemories = userMemories.map((memory) => {
+      const queryWords = query.toLowerCase().split(" ")
+      const contentWords = memory.content.toLowerCase().split(" ")
+      const overlap = queryWords.filter((word) => contentWords.includes(word)).length
+
+      // Score based on word overlap, importance, and recency
+      const wordScore = overlap / Math.max(queryWords.length, 1)
+      const importanceScore = memory.importance
+      const recencyScore = 1 / (1 + (Date.now() - memory.timestamp.getTime()) / (24 * 60 * 60 * 1000)) // Decay over days
+
+      const totalScore = wordScore * 0.4 + importanceScore * 0.3 + recencyScore * 0.3
+
+      // Update access count
+      memory.accessCount++
+      memory.lastAccessed = new Date()
+
+      return { memory, score: totalScore }
+    })
+
+    // Sort by score and return top memories
+    const relevantMemories = scoredMemories
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((item) => item.memory)
+
+    this.saveToStorage() // Save updated access counts
+    return relevantMemories
   }
 
   // Get conversation insights for visualization
@@ -304,8 +619,15 @@ export class MemoryRetentionSystem {
     personalContext: ConversationProfile["personalContext"]
     hardwareOptimization: ConversationProfile["hardwareOptimization"]
     disconnectionPoints: ConversationProfile["disconnectionPoints"]
+    memoryStats: {
+      totalMemories: number
+      recentMemories: number
+      topTopics: Array<{ topic: string; frequency: number }>
+    }
   } {
     const profile = this.profiles.get(userId)
+    const userMemories = Array.from(this.memories.values()).filter((m) => m.userId === userId)
+
     if (!profile) {
       return {
         emotionalTrends: [],
@@ -315,14 +637,24 @@ export class MemoryRetentionSystem {
           preferences: [],
           relationships: [],
           futureEvents: [],
+          topics: [],
         },
         hardwareOptimization: {
           preferredStates: {},
           adaptationHistory: [],
         },
         disconnectionPoints: [],
+        memoryStats: {
+          totalMemories: 0,
+          recentMemories: 0,
+          topTopics: [],
+        },
       }
     }
+
+    const recentMemories = userMemories.filter(
+      (m) => m.timestamp > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    ).length
 
     return {
       emotionalTrends: profile.emotionalPatterns.map((p) => ({
@@ -332,20 +664,12 @@ export class MemoryRetentionSystem {
       personalContext: profile.personalContext,
       hardwareOptimization: profile.hardwareOptimization,
       disconnectionPoints: profile.disconnectionPoints,
+      memoryStats: {
+        totalMemories: userMemories.length,
+        recentMemories,
+        topTopics: profile.personalContext.topics.slice(0, 10),
+      },
     }
-  }
-
-  // Retrieve relevant memories for context
-  retrieveRelevantMemories(query: string, userId: string, limit = 5): MemoryNode[] {
-    const userMemories = Array.from(this.memories.values()).filter((memory) => {
-      // Simple relevance scoring based on content similarity
-      const queryWords = query.toLowerCase().split(" ")
-      const contentWords = memory.content.toLowerCase().split(" ")
-      const overlap = queryWords.filter((word) => contentWords.includes(word)).length
-      return overlap > 0
-    })
-
-    return userMemories.sort((a, b) => b.importance - a.importance).slice(0, limit)
   }
 
   // Get current hardware state
@@ -353,24 +677,61 @@ export class MemoryRetentionSystem {
     return { ...this.currentHardwareState }
   }
 
-  // Export profile data for file sharing
-  exportProfile(userId: string): string {
-    const profile = this.profiles.get(userId)
-    if (!profile) return "{}"
+  // Clear all memories for a user (for privacy/reset)
+  clearUserMemories(userId: string): void {
+    // Remove memories
+    const memoriesToDelete = Array.from(this.memories.keys()).filter((id) => this.memories.get(id)?.userId === userId)
+    memoriesToDelete.forEach((id) => this.memories.delete(id))
 
-    return JSON.stringify(profile, null, 2)
+    // Remove profile
+    this.profiles.delete(userId)
+
+    // Save changes
+    this.saveToStorage()
+    console.log(`Cleared all memories for user ${userId}`)
   }
 
-  // Import profile data from file
-  importProfile(userId: string, profileData: string): boolean {
-    try {
-      const profile = JSON.parse(profileData) as ConversationProfile
-      profile.userId = userId // Ensure correct user ID
-      this.profiles.set(userId, profile)
-      return true
-    } catch (error) {
-      console.error("Failed to import profile:", error)
-      return false
+  // Get memory statistics
+  getMemoryStats(userId: string): {
+    totalMemories: number
+    emotionalBreakdown: Record<string, number>
+    topTags: Array<{ tag: string; count: number }>
+    memoryTimeline: Array<{ date: string; count: number }>
+  } {
+    const userMemories = Array.from(this.memories.values()).filter((m) => m.userId === userId)
+
+    const emotionalBreakdown: Record<string, number> = {}
+    const tagCounts: Record<string, number> = {}
+    const dailyCounts: Record<string, number> = {}
+
+    userMemories.forEach((memory) => {
+      // Emotional breakdown
+      emotionalBreakdown[memory.emotion] = (emotionalBreakdown[memory.emotion] || 0) + 1
+
+      // Tag counts
+      memory.tags.forEach((tag) => {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1
+      })
+
+      // Daily counts
+      const dateKey = memory.timestamp.toISOString().split("T")[0]
+      dailyCounts[dateKey] = (dailyCounts[dateKey] || 0) + 1
+    })
+
+    const topTags = Object.entries(tagCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([tag, count]) => ({ tag, count }))
+
+    const memoryTimeline = Object.entries(dailyCounts)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, count]) => ({ date, count }))
+
+    return {
+      totalMemories: userMemories.length,
+      emotionalBreakdown,
+      topTags,
+      memoryTimeline,
     }
   }
 }
