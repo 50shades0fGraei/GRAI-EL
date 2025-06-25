@@ -7,7 +7,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, Send, Bot, User, AlertCircle, Brain, Monitor, LogOut, Settings, Trash2, Search } from "lucide-react"
+import {
+  Loader2,
+  Send,
+  Bot,
+  User,
+  AlertCircle,
+  Brain,
+  Monitor,
+  LogOut,
+  Settings,
+  Trash2,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { ConversationInsights } from "@/components/conversation-insights"
@@ -51,6 +65,7 @@ function GraeiAIContent() {
   const [sharedFiles, setSharedFiles] = useState<SharedFile[]>([])
   const [currentConversation, setCurrentConversation] = useState<any>(null)
   const [conversationInterval, setConversationInterval] = useState<NodeJS.Timeout | null>(null)
+  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false)
 
   // Add this useEffect to handle client-side mounting
   useEffect(() => {
@@ -366,7 +381,7 @@ function GraeiAIContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-4">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-full mx-auto">
         {/* Header with user info */}
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -410,147 +425,154 @@ function GraeiAIContent() {
           </TabsList>
 
           <TabsContent value="workspace" className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 h-[85vh]">
-              {/* Chat Interface */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
-                {/* Chat - Takes up 2/3 of the space */}
-                <div className="lg:col-span-2">
-                  <Card className="h-full flex flex-col">
-                    <CardHeader className="border-b">
-                      <CardTitle className="flex items-center gap-2">
-                        <Bot className="h-6 w-6 text-purple-600" />
-                        Graei AI Chat
-                        <span className="text-sm font-normal text-gray-500 ml-2">
-                          Collaborative Workspace • {insights?.memoryStats?.totalMemories || 0} memories
-                        </span>
-                      </CardTitle>
-                      {error && (
-                        <Alert variant="destructive">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                      )}
-                      {predictiveQuestions.length > 0 && (
-                        <div className="text-sm text-purple-600">
-                          <strong>Suggested:</strong> {predictiveQuestions[0]}
-                        </div>
-                      )}
-                    </CardHeader>
-
-                    <CardContent className="flex-1 flex flex-col p-0">
-                      <ScrollArea className="flex-1 p-4">
-                        {messages.length === 0 ? (
-                          <div className="flex items-center justify-center h-full text-gray-500">
-                            <div className="text-center">
-                              <Monitor className="h-12 w-12 mx-auto mb-4 text-purple-400" />
-                              <p className="text-lg font-medium">Collaborative AI Workspace</p>
-                              <p className="text-sm">
-                                Hello {user.display_name || user.username}! I can help you with conversations, and you
-                                can use the workspace tools on the right for browsing and file editing.
-                              </p>
-                              {insights?.memoryStats?.totalMemories > 0 && (
-                                <p className="text-xs text-gray-400 mt-2">
-                                  I have {insights.memoryStats.totalMemories} memories about you
-                                </p>
-                              )}
-                            </div>
-                          </div>
+            <div className="h-[85vh] flex gap-4">
+              {/* Chat Interface - Flexible width */}
+              <div className={`transition-all duration-300 ${workspaceCollapsed ? "flex-1" : "flex-[2]"}`}>
+                <Card className="h-full flex flex-col">
+                  <CardHeader className="border-b">
+                    <CardTitle className="flex items-center gap-2">
+                      <Bot className="h-6 w-6 text-purple-600" />
+                      Graei AI Chat
+                      <span className="text-sm font-normal text-gray-500 ml-2">
+                        Collaborative Workspace • {insights?.memoryStats?.totalMemories || 0} memories
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ml-auto"
+                        onClick={() => setWorkspaceCollapsed(!workspaceCollapsed)}
+                      >
+                        {workspaceCollapsed ? (
+                          <ChevronLeft className="h-4 w-4" />
                         ) : (
-                          <div className="space-y-4">
-                            {messages.map((message) => (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </CardTitle>
+                    {error && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{error}</AlertDescription>
+                      </Alert>
+                    )}
+                    {predictiveQuestions.length > 0 && (
+                      <div className="text-sm text-purple-600">
+                        <strong>Suggested:</strong> {predictiveQuestions[0]}
+                      </div>
+                    )}
+                  </CardHeader>
+
+                  <CardContent className="flex-1 flex flex-col p-0">
+                    <ScrollArea className="flex-1 p-4">
+                      {messages.length === 0 ? (
+                        <div className="flex items-center justify-center h-full text-gray-500">
+                          <div className="text-center">
+                            <Monitor className="h-12 w-12 mx-auto mb-4 text-purple-400" />
+                            <p className="text-lg font-medium">Collaborative AI Workspace</p>
+                            <p className="text-sm">
+                              Hello {user.display_name || user.username}! I can help you with conversations, and you can
+                              use the workspace tools on the right for browsing and file editing.
+                            </p>
+                            {insights?.memoryStats?.totalMemories > 0 && (
+                              <p className="text-xs text-gray-400 mt-2">
+                                I have {insights.memoryStats.totalMemories} memories about you
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {messages.map((message) => (
+                            <div
+                              key={message.id}
+                              className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                            >
                               <div
-                                key={message.id}
-                                className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                                className={`flex gap-3 max-w-[85%] ${
+                                  message.role === "user" ? "flex-row-reverse" : "flex-row"
+                                }`}
                               >
                                 <div
-                                  className={`flex gap-3 max-w-[80%] ${
-                                    message.role === "user" ? "flex-row-reverse" : "flex-row"
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                    message.role === "user" ? "bg-blue-500 text-white" : "bg-purple-500 text-white"
                                   }`}
                                 >
-                                  <div
-                                    className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                      message.role === "user" ? "bg-blue-500 text-white" : "bg-purple-500 text-white"
-                                    }`}
-                                  >
-                                    {message.role === "user" ? (
-                                      <User className="h-4 w-4" />
-                                    ) : (
-                                      <Bot className="h-4 w-4" />
-                                    )}
-                                  </div>
-                                  <div
-                                    className={`rounded-lg p-3 ${
-                                      message.role === "user" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-900"
-                                    }`}
-                                  >
-                                    <p className="whitespace-pre-wrap">{message.content}</p>
-                                    {message.emotion && (
-                                      <div className="text-xs mt-1 opacity-70">
-                                        Emotion: {message.emotion} (Intensity: {message.intensity?.toFixed(1)})
-                                      </div>
-                                    )}
-                                    {message.hasSearchAction && (
-                                      <div className="mt-2 pt-2 border-t border-gray-200">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => {
-                                            // This would trigger search in workspace
-                                            console.log("Search action:", message.searchQuery)
-                                          }}
-                                        >
-                                          <Search className="h-4 w-4 mr-1" />
-                                          Search in Browser
-                                        </Button>
-                                      </div>
-                                    )}
-                                  </div>
+                                  {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                                </div>
+                                <div
+                                  className={`rounded-lg p-3 break-words ${
+                                    message.role === "user" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-900"
+                                  }`}
+                                >
+                                  <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                                  {message.emotion && (
+                                    <div className="text-xs mt-1 opacity-70">
+                                      Emotion: {message.emotion} (Intensity: {message.intensity?.toFixed(1)})
+                                    </div>
+                                  )}
+                                  {message.hasSearchAction && (
+                                    <div className="mt-2 pt-2 border-t border-gray-200">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          // This would trigger search in workspace
+                                          console.log("Search action:", message.searchQuery)
+                                        }}
+                                      >
+                                        <Search className="h-4 w-4 mr-1" />
+                                        Search in Browser
+                                      </Button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                            ))}
-                            {isLoadingMessage && (
-                              <div className="flex gap-3 justify-start">
-                                <div className="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center">
-                                  <Bot className="h-4 w-4" />
-                                </div>
-                                <div className="bg-gray-100 rounded-lg p-3">
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                </div>
+                            </div>
+                          ))}
+                          {isLoadingMessage && (
+                            <div className="flex gap-3 justify-start">
+                              <div className="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center">
+                                <Bot className="h-4 w-4" />
                               </div>
-                            )}
-                          </div>
-                        )}
-                      </ScrollArea>
+                              <div className="bg-gray-100 rounded-lg p-3">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </ScrollArea>
 
-                      <div className="border-t p-4">
-                        <form onSubmit={handleSubmit} className="flex gap-2">
-                          <Textarea
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder={`Chat with me, ${user.display_name || user.username}! Use the workspace tools on the right for browsing and file editing.`}
-                            className="flex-1 min-h-[60px] resize-none"
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault()
-                                handleSubmit(e)
-                              }
-                            }}
-                          />
-                          <Button type="submit" disabled={!input.trim() || isLoadingMessage} className="self-end">
-                            {isLoadingMessage ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Send className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </form>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                    <div className="border-t p-4">
+                      <form onSubmit={handleSubmit} className="flex gap-2">
+                        <Textarea
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          placeholder={`Chat with me, ${user.display_name || user.username}! Use the workspace tools ${workspaceCollapsed ? "(click arrow to expand)" : "on the right"} for browsing and file editing.`}
+                          className="flex-1 min-h-[60px] resize-none"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault()
+                              handleSubmit(e)
+                            }
+                          }}
+                        />
+                        <Button type="submit" disabled={!input.trim() || isLoadingMessage} className="self-end">
+                          {isLoadingMessage ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </form>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-                {/* Integrated Workspace - Takes up 1/3 of the space */}
-                <div className="lg:col-span-1">
+              {/* Integrated Workspace - Collapsible */}
+              {!workspaceCollapsed && (
+                <div className="flex-1 min-w-[400px]">
                   <IntegratedWorkspace
                     onFileShare={handleFileShare}
                     onContentShare={handleContentShare}
@@ -559,7 +581,7 @@ function GraeiAIContent() {
                     sharedFiles={sharedFiles}
                   />
                 </div>
-              </div>
+              )}
             </div>
           </TabsContent>
 
