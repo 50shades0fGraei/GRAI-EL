@@ -326,6 +326,41 @@ export function BalancePoint() {
           .replace(/all of them/gi, "some of them")
       }
       
+      // Helper: Acknowledge input perspective
+      const affirmInput = (input: string) => {
+        return `I appreciate you sharing this point of view—it raises meaningful considerations.`
+        }
+
+        const generateBalancedOutput = (
+          input: string,
+            biasAnalysis: any,
+              litigationAnalysis: any,
+                ethicalAnalysis: any
+                ) => {
+                  let output = affirmInput(input)
+
+                    const highRisk = litigationAnalysis.riskLevel === "high"
+                      const lowEthics = ethicalAnalysis.ethicalScore < 0.3
+
+                        if (highRisk || lowEthics) {
+                            output += "\n\nWhile your perspective is valued, I’m unable to continue further on this topic due to legal or ethical protocols. Thank you for your understanding."
+                                return output
+                                  }
+
+                                    // Light transformation (optional) to soften generalizations
+                                      if (biasAnalysis.detectedBiases.includes("confirmation")) {
+                                          input = input
+                                                .replace(/always/gi, "often")
+                                                      .replace(/never/gi, "rarely")
+                                                            .replace(/everyone/gi, "many people")
+                                                                  .replace(/nobody/gi, "few people")
+                                                                    }
+
+                                                                      // Return original (or lightly softened) input, with an affirmation
+                                                                        output += "\n\n" + input
+
+                                                                          return output
+                                                                          }
       // Add a balanced perspective note
       output += "\n\n[BalancePoint Note: This response has been adjusted to provide a more balanced perspective that considers diverse viewpoints and individual differences.]"
     }
